@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=harbour-labcam
+Exec=harbour-labcam
+Name=Lab Camera
+
+[X-Sailjail]
+Permissions=Internet;Audio;Location;RemovableMedia;Pictures;Videos
+OrganizationName=harbour-labcam
+ApplicationName=LabCamera

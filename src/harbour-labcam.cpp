@@ -1,0 +1,96 @@
+#ifdef QT_QML_DEBUG
+#include <QtQuick>
+#endif
+
+#include <QQuickView>
+#include <QGuiApplication>
+#include <QQmlContext>
+#include <QQuickItem>
+#include <QSortFilterProxyModel>
+
+#include <sailfishapp.h>
+#include "deviceinfo.h"
+#include "effectsmodel.h"
+#include "exposuremodel.h"
+#include "isomodel.h"
+#include "resolutionmodel.h"
+#include "wbmodel.h"
+#include "focusmodel.h"
+#include "flashmodel.h"
+#include "fsoperations.h"
+#include "resourcehandler.h"
+#include "storagemodel.h"
+#include "exifmodel.h"
+#include "metadatamodel.h"
+#include "imageoverlay.h"
+#include "componentid.h"
+#include "thermalcamera.h"
+#include <QQmlEngine>
+
+int main(int argc, char *argv[])
+{
+    // SailfishApp::main() will display "qml/harbour-labcam.qml", if you need more
+    // control over initialization, you can use:
+    //
+    //   - SailfishApp::application(int, char *[]) to get the QGuiApplication *
+    //   - SailfishApp::createView() to get a new QQuickView * instance
+    //   - SailfishApp::pathTo(QString) to get a QUrl to a resource file
+    //   - SailfishApp::pathToMainQml() to get a QUrl to the main QML file
+    //
+    // To display the view, call "show()" (will show fullscreen on device).
+
+    QGuiApplication *app = SailfishApp::application(argc, argv);
+
+    app->setOrganizationName("harbour-labcam"); // needed for Sailjail
+    app->setApplicationName("LabCamera");
+
+    qmlRegisterType<EffectsModel>("uk.co.piggz.harbour_advanced_camera", 1, 0, "EffectsModel");
+    qmlRegisterType<ExposureModel>("uk.co.piggz.harbour_advanced_camera", 1, 0, "ExposureModel");
+    qmlRegisterType<IsoModel>("uk.co.piggz.harbour_advanced_camera", 1, 0, "IsoModel");
+    qmlRegisterType<ResolutionModel>("uk.co.piggz.harbour_advanced_camera", 1, 0, "ResolutionModel");
+    qmlRegisterType<WbModel>("uk.co.piggz.harbour_advanced_camera", 1, 0, "WhiteBalanceModel");
+    qmlRegisterType<FocusModel>("uk.co.piggz.harbour_advanced_camera", 1, 0, "FocusModel");
+    qmlRegisterType<FlashModel>("uk.co.piggz.harbour_advanced_camera", 1, 0, "FlashModel");
+    qmlRegisterType<ExifModel>("uk.co.piggz.harbour_advanced_camera", 1, 0, "ExifModel");
+    qmlRegisterType<MetadataModel>("uk.co.piggz.harbour_advanced_camera", 1, 0, "MetadataModel");
+
+    ResolutionModel resolutionModel;
+    QSortFilterProxyModel sortedResolutionModel;
+    sortedResolutionModel.setSourceModel(&resolutionModel);
+    sortedResolutionModel.setSortRole(ResolutionModel::ResolutionMpx);
+    sortedResolutionModel.sort(0, Qt::DescendingOrder);
+
+    QQuickView *view = SailfishApp::createView();
+
+    ResourceHandler handler;
+    handler.acquire();
+
+    view->rootContext()->setContextProperty("modelResolution", &resolutionModel);
+    view->rootContext()->setContextProperty("sortedModelResolution", &sortedResolutionModel);
+    StorageModel storageModel;
+    view->rootContext()->setContextProperty("modelStorage", &storageModel);
+    FSOperations fsOperations;
+    view->rootContext()->setContextProperty("fsOperations", &fsOperations);
+    ImageOverlay imageOverlay;
+    view->rootContext()->setContextProperty("imageOverlay", &imageOverlay);
+    ComponentId componentId;
+    view->rootContext()->setContextProperty("componentId", &componentId);
+    ThermalCamera thermalCam;                       // InfiRay P2 Pro (V4L2 /dev/video2)
+    view->rootContext()->setContextProperty("thermalCam", &thermalCam);
+    view->engine()->addImageProvider(QStringLiteral("thermal"), new ThermalImageProvider(&thermalCam));
+
+    view->setSource(SailfishApp::pathTo("qml/harbour-labcam.qml"));
+
+    DeviceInfo deviceInfo;
+    view->rootContext()->setContextProperty("CameraManufacturer", deviceInfo.manufacturer());
+    view->rootContext()->setContextProperty("CameraPrettyModelName", deviceInfo.prettyModelName());
+
+    QObject::connect(view, &QQuickView::focusObjectChanged, &handler,
+                     &ResourceHandler::handleFocusChange);
+    QObject::connect(&fsOperations, &FSOperations::rescan, &storageModel,
+                     &StorageModel::scan);
+
+    view->show();
+
+    return app->exec();
+}

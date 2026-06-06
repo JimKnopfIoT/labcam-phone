@@ -1,0 +1,50 @@
+Name: harbour-labcam
+Summary: Lab Camera
+Version: 0.9.8
+Release: 1
+# The contents of the Group field should be one of the groups listed here:
+# https://github.com/mer-tools/spectacle/blob/master/data/GROUPS
+Group: Qt/Qt
+URL: http://github.com/piggz/harbour-advanced-camera
+License: GPLv2
+# This must be generated before uploading a package to a remote build service.
+# Usually this line does not need to be modified.
+Sources:
+- '%{name}-%{version}.tar.bz2'
+Description: |
+  Camera with live lab-instrument overlay burned into photos
+Configure: none
+# The qtc5 builder inserts macros to allow QtCreator to have fine
+# control over qmake/make execution
+Builder: qtc5
+
+# This section specifies build dependencies that are resolved using pkgconfig.
+# This is the preferred way of specifying build dependencies for your package.
+PkgConfigBR:
+  - sailfishapp >= 1.0.2
+  - Qt5Core
+  - Qt5Multimedia
+  - Qt5Qml
+  - Qt5Quick
+
+# Build dependencies without a pkgconfig setup can be listed here
+PkgBR:
+  - qt5-qttools-linguist
+  - ssu-sysinfo-devel
+  - libexif-devel
+
+# Runtime dependencies which are not automatically detected
+Requires:
+  - sailfishsilica-qt5 >= 0.10.9
+  # QtWebSockets QML module (import QtWebSockets) used by the instrument overlay
+  - qt5-qtdeclarative-import-websockets
+
+# All installed files
+Files:
+  - '%{_bindir}'
+  - '%{_datadir}/%{name}'
+  - '%{_datadir}/applications/%{name}.desktop'
+  - '%{_datadir}/icons/hicolor/*/apps/%{name}.png'
+
+# For more information about yaml and what's supported in Sailfish OS
+# build system, please see https://wiki.merproject.org/wiki/Spectacle
