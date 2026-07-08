@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="iron" x1="0" y1="44" x2="0" y2="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0.00" stop-color="#fcffa4"/>
+      <stop offset="0.35" stop-color="#f9a825"/>
+      <stop offset="0.65" stop-color="#e0512f"/>
+      <stop offset="1.00" stop-color="#a52784"/>
+    </linearGradient>
+  </defs>
+
+  <!-- only top-right rounded (quarter circle to edge middles); other 3 corners sharp -->
+  <!-- semi-transparent dark grey like the instrument panels (#6c191919 = rgba(26,26,26,0.42)) -->
+  <path d="M 0 0 L 128 0 A 128 128 0 0 1 256 128 L 256 256 L 0 256 Z" fill="#191919" fill-opacity="0.42"/>
+
+  <g fill="url(#iron)">
+    <path d="M 118 58 C 176 64 186 124 172 168 L 150 168 C 162 126 156 88 118 82 Z"/>
+    <circle cx="176" cy="120" r="13"/>
+    <rect x="99" y="58" width="23" height="66" rx="9"/>
+    <rect x="92" y="48" width="37" height="15" rx="7"/>
+    <path d="M 101 124 H 120 L 115 141 H 106 Z"/>
+    <rect x="84" y="150" width="94" height="13" rx="5"/>
+    <rect x="72" y="190" width="112" height="16" rx="8"/>
+  </g>
+  <circle cx="110.5" cy="150" r="6" fill="#fffde0"/>
+</svg>
