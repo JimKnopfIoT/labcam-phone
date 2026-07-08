@@ -1,0 +1,21 @@
+# Build artifacts
+*.o
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+Makefile
+.qmake.stash
+*.qm
+documentation.list
+installroot/
+RPMS/
+.mb2/
+
+# The compiled binary (named like the package)
+/harbour-labcam
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
