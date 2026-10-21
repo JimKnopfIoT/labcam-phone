@@ -49,6 +49,8 @@ internet.** Run it only inside a trusted LAN. Use at your own risk.
 
 ---
 
+AI assisted development
+
 ## License
 
 * The app inherits upstream's license: **GPL-2.0-or-later**, with some files
