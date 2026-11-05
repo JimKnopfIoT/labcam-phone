@@ -42,6 +42,26 @@ public:
                                       int quality = 95,
                                       const QString &outPath = QString());
 
+    // Builds the output as a 1:1 reproduction of the ON-SCREEN view: the canvas gets the
+    // proportions of the page (pageAspect = pageW/pageH) and every element is drawn at its
+    // page-normalized position. That is the only way the photo can show exactly what the
+    // display shows -- the IR band runs to the screen edge and therefore extends beyond the
+    // camera image; drawing into the sensor frame could only ever clip or shrink it.
+    //   photo   -> [px,py,pw,ph]  (the letterboxed camera image inside the page)
+    //   irPath  -> [ix,iy,iw,ih]  (empty path = no IR)
+    //   ovlPath -> [ox,oy,ow,oh]  (empty path = no instrument overlay)
+    // Draw order matches the screen z-order: photo, IR, instruments.
+    // Canvas resolution is derived from the photo so the camera image keeps its native pixels.
+    Q_INVOKABLE QString composeView(const QString &photoPath,
+                                    double pageAspect,
+                                    double px, double py, double pw, double ph,
+                                    const QString &irPath,
+                                    double ix, double iy, double iw, double ih,
+                                    const QString &ovlPath,
+                                    double ox, double oy, double ow, double oh,
+                                    int quality = 95,
+                                    const QString &outPath = QString());
+
     // Draws a tight silhouette (polygon outline) around the identified component into the photo.
     // pointsNorm: list of [x,y] points, normalized 0..1 WITHIN the ROI crop.
     // nx,ny,nw,nh: ROI in the (EXIF-upright) photo, normalized 0..1 — maps points onto the

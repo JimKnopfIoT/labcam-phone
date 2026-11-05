@@ -1,12 +1,12 @@
 Name: harbour-labcam
 Summary: Lab Camera
-Version: 0.9.8
+Version: 0.9.9
 Release: 1
 # The contents of the Group field should be one of the groups listed here:
 # https://github.com/mer-tools/spectacle/blob/master/data/GROUPS
 Group: Qt/Qt
-URL: http://github.com/piggz/harbour-advanced-camera
-License: GPLv2
+URL: https://github.com/JimKnopfIoT/labcam-phone
+License: GPLv2+
 # This must be generated before uploading a package to a remote build service.
 # Usually this line does not need to be modified.
 Sources:

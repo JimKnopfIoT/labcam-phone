@@ -13,12 +13,12 @@ Name:       harbour-labcam
 %{!?qtc_make:%define qtc_make make}
 %{?qtc_builddir:%define _builddir %qtc_builddir}
 Summary:    Lab Camera
-Version:    0.9.8
+Version:    0.9.9
 Release:    1
 %define _buildhost reproducible-builder
 Group:      Qt/Qt
 License:    GPLv2+
-URL:        https://github.com/piggz/harbour-advanced-camera
+URL:        https://github.com/JimKnopfIoT/labcam-phone
 Source0:    %{name}-%{version}.tar.bz2
 Source100:  harbour-labcam.yaml
 Requires:   sailfishsilica-qt5 >= 0.10.9

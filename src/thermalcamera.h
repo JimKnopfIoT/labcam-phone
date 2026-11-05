@@ -64,7 +64,8 @@ public:
     // Temperature (deg C, including offset) at normalized position (nx,ny) in the image; NaN if invalid.
     Q_INVOKABLE double tempAt(double nx, double ny);
 
-    Q_INVOKABLE void start(const QString &dev = QStringLiteral("/dev/video2"));
+    // Empty = auto-discover the node via the USB id (see findThermalDevice).
+    Q_INVOKABLE void start(const QString &dev = QString());
     Q_INVOKABLE void stop();
 
 signals:

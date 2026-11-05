@@ -6,6 +6,10 @@
 #include "thermalcamera.h"
 
 #include <QDebug>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <algorithm>
 #include <cstring>
 #include <cerrno>
 #include <cmath>
@@ -159,10 +163,76 @@ double ThermalCamera::tempAt(double nx, double ny)
     return double(m_temps[y * m_tw + x]) + m_tempOffset.load();
 }
 
+
+// ---- Device discovery: InfiRay P2 Pro (UVC 0bda:5830) ----
+// A fixed path does not work. On Qualcomm devices (Xperia 10 III) the camera is
+// /dev/video2; on MediaTek (Jolla J2) mtk-jpeg-enc / mtk-vcodec-enc / mtk-vcodec-dec
+// already occupy video0..2 and the camera ends up higher. So resolve the node via the
+// USB id in sysfs instead of guessing.
+static bool isCaptureNode(const QString &path)
+{
+    const QByteArray p = path.toUtf8();
+    const int fd = ::open(p.constData(), O_RDWR | O_NONBLOCK);
+    if (fd < 0)
+        return false;
+    struct v4l2_capability cap;
+    memset(&cap, 0, sizeof cap);
+    bool ok = false;
+    if (ioctl(fd, VIDIOC_QUERYCAP, &cap) >= 0) {
+        const quint32 caps = cap.device_caps ? cap.device_caps : cap.capabilities;
+        ok = (caps & V4L2_CAP_VIDEO_CAPTURE) != 0;   // drops the P2 Pro metadata node
+    }
+    ::close(fd);
+    return ok;
+}
+
+static QString findThermalDevice()
+{
+    QDir sys(QStringLiteral("/sys/class/video4linux"));
+    QStringList nodes = sys.entryList(QStringList() << QStringLiteral("video*"),
+                                      QDir::Dirs | QDir::NoDotAndDotDot);
+    // sort numerically, otherwise video10 comes before video2
+    std::sort(nodes.begin(), nodes.end(), [](const QString &a, const QString &b) {
+        return a.mid(5).toInt() < b.mid(5).toInt();
+    });
+    for (const QString &node : nodes) {
+        // walk up the sysfs tree from the V4L2 interface until idVendor/idProduct show up
+        QString path = QFileInfo(sys.absoluteFilePath(node) + QStringLiteral("/device")).canonicalFilePath();
+        for (int up = 0; up < 5 && !path.isEmpty(); ++up) {
+            QFile fv(path + QStringLiteral("/idVendor"));
+            QFile fp(path + QStringLiteral("/idProduct"));
+            if (fv.exists() && fp.exists()) {
+                QString vid, pid;
+                if (fv.open(QIODevice::ReadOnly))
+                    vid = QString::fromLatin1(fv.readAll()).trimmed().toLower();
+                if (fp.open(QIODevice::ReadOnly))
+                    pid = QString::fromLatin1(fp.readAll()).trimmed().toLower();
+                if (vid == QLatin1String("0bda") && pid == QLatin1String("5830")) {
+                    const QString devPath = QStringLiteral("/dev/") + node;
+                    if (isCaptureNode(devPath))
+                        return devPath;
+                }
+                break;   // reached the USB device, no match -> next node
+            }
+            path = QFileInfo(path).absolutePath();
+        }
+    }
+    return QString();
+}
+
 void ThermalCamera::start(const QString &dev)
 {
     if (m_run.load()) return;
     m_dev = dev;
+    if (m_dev.isEmpty()) {
+        m_dev = findThermalDevice();
+        if (m_dev.isEmpty()) {
+            m_dev = QStringLiteral("/dev/video2");   // fallback: previous behaviour
+            setStatus(QStringLiteral("P2 Pro (0bda:5830) not found, trying %1").arg(m_dev));
+        } else {
+            setStatus(QStringLiteral("P2 Pro found: %1").arg(m_dev));
+        }
+    }
     m_run.store(true);
     emit activeChanged();
     m_thread = std::thread(&ThermalCamera::loop, this);
