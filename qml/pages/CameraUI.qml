@@ -80,13 +80,24 @@ Page {
     // Display aspect ratio (W/H) in the current visual orientation.
     readonly property real _imgAspect: _isPortrait ? (1.0 / _sensorAspect) : _sensorAspect
     readonly property rect _imgRect: {
-        var pw = page.width, ph = page.height
         var a = _imgAspect
+        var wx = 0, wy = 0, ww = page.width, wh = page.height
+        var vo = page.videoOutput
+        if (vo && vo.width > 0 && vo.height > 0) {
+            var o0 = page.mapFromItem(null, 0, 0)
+            var o1 = page.mapFromItem(null, vo.width, vo.height)
+            wx = Math.min(o0.x, o1.x); wy = Math.min(o0.y, o1.y)
+            ww = Math.abs(o1.x - o0.x); wh = Math.abs(o1.y - o0.y)
+        }
         var iw, ih
-        if (pw / ph > a) { ih = ph; iw = ph * a }   // Page wider than image -> left/right margins
-        else             { iw = pw; ih = pw / a }   // top/bottom margins
-        return Qt.rect((pw - iw) / 2, (ph - ih) / 2, iw, ih)
+        if (ww / wh > a) { ih = wh; iw = wh * a }   // window wider than the image -> bars left/right
+        else             { iw = ww; ih = ww / a }   // bars top/bottom
+        return Qt.rect(wx + (ww - iw) / 2, wy + (wh - ih) / 2, iw, ih)
     }
+
+    // The fork's debug display (camera ID + resolution) at the top of the viewfinder. It lies
+    // across the instrument bar and never appears in the photo anyway -> off by default.
+    property bool showCameraInfo: false
 
     property string _pendingPhotoPath: ""
     property string _pendingOverlayPath: ""
@@ -95,7 +106,11 @@ Page {
     // Burn IR thermal image into the photo (WYSIWYG at the display position)
     property string _pendingIrPath: ""
     property bool _irInFlight: false
-    property rect _irRect: Qt.rect(0, 0, 0, 0)   // normalized against page._imgRect
+    // All three normalized against the PAGE (not the image area) -- composeView draws them
+    // onto a canvas with the display's proportions, reproducing the on-screen view exactly.
+    property rect _irRect: Qt.rect(0, 0, 0, 0)      // IR band, page-normalized
+    property rect _photoRect: Qt.rect(0, 0, 1, 1)   // letterboxed camera image, page-normalized
+    property rect _ovlRect: Qt.rect(0, 0, 0, 0)     // instrument overlay, page-normalized
 
     // ---- Component ID (phase 3) ----
     property Item videoOutput: null        // set by root (viewfinder VideoOutput) for ROI mapping
@@ -545,6 +560,7 @@ Page {
 
                 Label {
                     id: lblCameraId
+                    visible: page.showCameraInfo
                     text: qsTr("Camera: ") + camera.deviceId
                     color: Theme.lightPrimaryColor
                 }
@@ -552,6 +568,7 @@ Page {
                 Label {
                     property bool forceUpdate: false
                     id: lblResolution
+                    visible: page.showCameraInfo
                     color: Theme.lightPrimaryColor
                     text: (forceUpdate
                            || !forceUpdate) ? settings.sizeToStr(
@@ -684,9 +701,19 @@ Page {
         portrait: _portrait
 
         // Anchor to the image area computed in PAGE coordinates (page._imgRect) so the bar
-        // stays within the image in both orientations. Portrait: at the very top, at the edge.
+        // starts at the camera IMAGE area, not at the screen edge. Otherwise, in portrait it
+        // sticks to the top left over the controls / in the corner of the photo.
+        //   Portrait: keep at least 'portraitClearFrac' of the height free at the top (clears
+        //   the top controls even when the sensor is 16:9 and _imgRect.y is about 0); with
+        //   letterboxing (4:3 etc.) the larger image margin applies automatically.
+        //   portraitTopExtra: optional fine-tuning offset downwards.
+        readonly property real portraitClearFrac: 0.12
+        readonly property real portraitTopExtra: 0
         x: page._imgRect.x + Theme.paddingMedium
-        y: _portrait ? Theme.paddingMedium : (page._imgRect.y + Theme.paddingMedium)
+        y: _portrait
+           ? (Math.max(page._imgRect.y, Math.round(page.height * portraitClearFrac))
+              + Theme.paddingMedium + portraitTopExtra)
+           : (page._imgRect.y + Theme.paddingMedium)
         // Landscape: 4 panels across the full image width at the top. Portrait: narrow strip LEFT.
         width: _portrait
                ? Math.round(page._imgRect.width * page.instrumentStripFraction)
@@ -1561,6 +1588,9 @@ Page {
         // composites as soon as the photo and both grabs are ready.
         var wantInstr = burnOverlayIntoPhoto && showInstruments
         var wantIr = page.irMode > 0
+        // Page-normalized geometry for composeView (on-screen view 1:1).
+        _photoRect = Qt.rect(page._imgRect.x / page.width, page._imgRect.y / page.height,
+                             page._imgRect.width / page.width, page._imgRect.height / page.height)
         _overlayInFlight = wantInstr
         _irInFlight = wantIr
         var res = camera.imageCapture.resolution
@@ -1568,6 +1598,8 @@ Page {
         if (wantInstr) {
             // Portrait: narrow left strip; landscape: full width at the top.
             _pendingOverlayFraction = instrumentBar._portrait ? page.instrumentStripFraction : 1.0
+            _ovlRect = Qt.rect(instrumentBar.x / page.width, instrumentBar.y / page.height,
+                               instrumentBar.width / page.width, instrumentBar.height / page.height)
             var targetW = Math.max(1, Math.round(base * _pendingOverlayFraction))
             var targetH = Math.max(1, Math.round(
                                        targetW * instrumentBar.height / instrumentBar.width))
@@ -1581,12 +1613,11 @@ Page {
             }, Qt.size(targetW, targetH))
         }
         if (wantIr) {
-            // IR position normalized against the image area (page._imgRect) -> photo mapping.
-            // nx<0 / nw>1 possible (IR wider than image) -> C++ clips to photo.
-            _irRect = Qt.rect((irView.x - page._imgRect.x) / page._imgRect.width,
-                              (irView.y - page._imgRect.y) / page._imgRect.height,
-                              irView.width / page._imgRect.width,
-                              irView.height / page._imgRect.height)
+            // Everything normalized against the PAGE, not the image area: composeView builds a
+            // canvas with the display's proportions, so the photo reproduces the on-screen
+            // view 1:1. The band may run to the screen edge -- on that canvas it simply fits.
+            _irRect = Qt.rect(irView.x / page.width, irView.y / page.height,
+                              irView.width / page.width, irView.height / page.height)
             irView.grabToImage(function (result) {
                 var p = irTmpFile()
                 _pendingIrPath = (result && result.saveToFile(p)) ? p : ""
@@ -1607,17 +1638,19 @@ Page {
         // the (fullscreen-sized) IR would cover the instruments in the photo.
         var result = ""
         if (_pendingIrPath.length > 0) {
-            result = imageOverlay.burnImageRect(_pendingPhotoPath, _pendingIrPath,
-                                                _irRect.x, _irRect.y, _irRect.width, _irRect.height,
-                                                95, "")   // "" -> creates <photo>_ovl.jpg
-        }
-        if (_pendingOverlayPath.length > 0) {
-            var base = (result.length > 0) ? result : _pendingPhotoPath
-            var dst = (result.length > 0) ? result : ""   // burn on top of the IR result
-            var r = imageOverlay.burnOverlay(base, _pendingOverlayPath, 0, 95,
-                                             _pendingOverlayFraction, dst)
-            if (r.length > 0)
-                result = r
+            // With IR the band extends beyond the camera image (it runs to the screen edge),
+            // so the output gets the DISPLAY's canvas: page proportions, every element at its
+            // on-screen position. Nothing is clipped, nothing is scaled down.
+            result = imageOverlay.composeView(
+                        _pendingPhotoPath, page.width / page.height,
+                        _photoRect.x, _photoRect.y, _photoRect.width, _photoRect.height,
+                        _pendingIrPath, _irRect.x, _irRect.y, _irRect.width, _irRect.height,
+                        _pendingOverlayPath, _ovlRect.x, _ovlRect.y, _ovlRect.width, _ovlRect.height,
+                        95, "")   // "" -> creates <photo>_ovl.jpg
+        } else if (_pendingOverlayPath.length > 0) {
+            // Without IR everything fits inside the sensor frame -> previous path, full resolution.
+            result = imageOverlay.burnOverlay(_pendingPhotoPath, _pendingOverlayPath, 0, 95,
+                                              _pendingOverlayFraction, "")
         }
         if (result.length > 0) {
             // Keep the composited image, delete the native original (only ONE image in the gallery).

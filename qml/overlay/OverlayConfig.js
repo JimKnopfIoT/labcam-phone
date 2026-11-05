@@ -54,7 +54,12 @@ var CHARTS = {
 //  Returns {sign, num, unit}.
 // ============================================================
 function fmtDmm(value, baseUnit, mode, range) {
-    if (value === null || value === undefined || !isFinite(value) || Math.abs(value) > 1e30) {
+    // Overflow (open test leads / range exceeded): the DMM7510 reports
+    // the SCPI sentinel 9.9e37 and shows "OL" itself, which is what we show as well.
+    if (isOverload(value)) {
+        return { sign: "", num: "OL", unit: "", overload: true }
+    }
+    if (value === null || value === undefined || !isFinite(value)) {
         return { sign: "", num: "", unit: baseUnit || "" }
     }
     var abs = Math.abs(value)
@@ -147,6 +152,16 @@ function fmtDmm(value, baseUnit, mode, range) {
     }
 }
 
+// Overflow/"OL": SCPI sentinel (9.9e37) or +-Infinity. NOT null/undefined, which means
+// "no value" (instrument offline) and stays "—".
+var OVERLOAD_LIMIT = 1e30
+
+function isOverload(v) {
+    if (v === null || v === undefined) return false
+    if (typeof v !== "number") return false
+    return !isFinite(v) || Math.abs(v) >= OVERLOAD_LIMIT
+}
+
 function fmt3(v) {
     if (v === null || v === undefined || !isFinite(v)) return "—"
     return v.toFixed(3)
@@ -201,6 +216,7 @@ function dmmYMax(value, mode, range) {
     if (range !== null && range !== undefined && isFinite(range) && Math.abs(range) > 0) {
         return Math.abs(range) * 1.2
     }
+    if (isOverload(value)) return 1.2
     if (value === null || value === undefined || !isFinite(value)) return 1.2
     var abs = Math.abs(value)
     if (abs < 1e-12) return 1.2

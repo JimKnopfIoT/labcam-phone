@@ -81,6 +81,10 @@ The LCR panel reads a **DER EE DE-5000** — over a wired USB-serial adapter or 
 BLE "Transparent UART" module. Tap the panel name to toggle the source; the
 backend switches between the two (`{"cmd":"lcr_source","value":"toggle"}`).
 
+Double-tap an instrument's name to disconnect it, so you can work at the instrument
+itself; the panel shows `—` and "disconnected" until you double-tap again. Tap a
+two-value graph to switch between V, A and both. A DMM overflow shows **"OL"**.
+
 Key display rule ported from the original lab overlay: **the DMM reading follows
 the instrument's reported range, not the momentary value** — the unit (µV/mV/V…)
 and the graph's Y-scale are tied to the meter range so the display doesn't jump

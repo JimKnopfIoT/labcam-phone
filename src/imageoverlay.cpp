@@ -160,6 +160,74 @@ QString ImageOverlay::burnImageRect(const QString &photoPathIn,
     return out;
 }
 
+QString ImageOverlay::composeView(const QString &photoPathIn,
+                                  double pageAspect,
+                                  double px, double py, double pw, double ph,
+                                  const QString &irPathIn,
+                                  double ix, double iy, double iw, double ih,
+                                  const QString &ovlPathIn,
+                                  double ox, double oy, double ow, double oh,
+                                  int quality,
+                                  const QString &outPathIn)
+{
+    const QString photoPath = toLocalPath(photoPathIn);
+
+    QImageReader reader(photoPath);
+    reader.setAutoTransform(true);   // EXIF-upright, matching the on-screen orientation
+    QImage photo = reader.read();
+    if (photo.isNull()) {
+        const QString msg = QStringLiteral("composeView: cannot read photo: %1 (%2)")
+                .arg(photoPath, reader.errorString());
+        qWarning() << msg; emit error(msg); return QString();
+    }
+    if (pageAspect <= 0.0 || pw <= 0.0 || ph <= 0.0) {
+        qWarning() << "composeView: invalid page geometry"; return QString();
+    }
+
+    // Canvas resolution from the photo: the camera image must keep its native pixels,
+    // so the full page is photo.width()/pw wide.
+    const int W = qMax(1, qRound(photo.width() / pw));
+    const int H = qMax(1, qRound(W / pageAspect));
+    QImage canvas(W, H, QImage::Format_RGB32);
+    canvas.fill(Qt::black);          // letterbox bands are black, exactly as on screen
+
+    QPainter painter(&canvas);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    const QRectF photoRect(px * W, py * H, pw * W, ph * H);
+    painter.drawImage(photoRect, photo);
+
+    if (!irPathIn.isEmpty()) {
+        const QImage ir(toLocalPath(irPathIn));
+        if (!ir.isNull())
+            painter.drawImage(QRectF(ix * W, iy * H, iw * W, ih * H), ir);
+        else
+            qWarning() << "composeView: cannot read IR image" << irPathIn;
+    }
+    if (!ovlPathIn.isEmpty()) {
+        const QImage ovl(toLocalPath(ovlPathIn));
+        if (!ovl.isNull())
+            painter.drawImage(QRectF(ox * W, oy * H, ow * W, oh * H), ovl);
+        else
+            qWarning() << "composeView: cannot read overlay image" << ovlPathIn;
+    }
+    painter.end();
+
+    QString out = toLocalPath(outPathIn);
+    if (out.isEmpty()) {
+        const QFileInfo fi(photoPath);
+        out = fi.absolutePath() + QStringLiteral("/")
+                + fi.completeBaseName() + QStringLiteral("_ovl.jpg");
+    }
+    if (!canvas.save(out, "JPEG", quality)) {
+        const QString msg = QStringLiteral("composeView: saving failed: %1").arg(out);
+        qWarning() << msg; emit error(msg); return QString();
+    }
+    qDebug() << "composeView: saved" << out << canvas.size();
+    emit composed(out);
+    return out;
+}
+
 QString ImageOverlay::drawSilhouette(const QString &photoPathIn,
                                      const QVariantList &pointsNorm,
                                      double nx, double ny, double nw, double nh,

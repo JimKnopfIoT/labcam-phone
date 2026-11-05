@@ -15,6 +15,7 @@ Rectangle {
     // (deliberately opt-in: the overlays otherwise let taps through to the camera shutter).
     property bool   labelInteractive: false
     signal labelClicked()
+    signal labelDoubleClicked()
 
     // Row 1
     property string row1Mode: ""
@@ -38,6 +39,10 @@ Rectangle {
     // Graph
     property alias  graph: graph
     property bool   graphVisible: true
+    // Only when true does the graph catch taps (switches V/A/both). Like the
+    // device name this is deliberately opt-in, otherwise the overlay swallows taps
+    // meant for the camera shutter or focus.
+    property bool   graphInteractive: false
 
     // Sizes centrally adjustable (set smaller by the bar per orientation -> reduce height).
     property real pad: Theme.paddingSmall
@@ -172,12 +177,22 @@ Rectangle {
             opacity: _dimOpacity
         }
 
-        // --- Graph ---
-        ScrollGraph {
-            id: graph
+        // --- Graph (optionally tappable -> switch series solo) ---
+        Item {
             width: parent.width
             height: graphHeight
             visible: graphVisible
+
+            ScrollGraph {
+                id: graph
+                anchors.fill: parent
+            }
+            MouseArea {
+                anchors.fill: parent
+                enabled: panel.graphInteractive
+                visible: enabled
+                onClicked: graph.toggleSolo()
+            }
         }
 
         // --- Device name (optionally tappable → labelClicked) ---
@@ -198,6 +213,7 @@ Rectangle {
                 enabled: panel.labelInteractive
                 visible: enabled
                 onClicked: panel.labelClicked()
+                onDoubleClicked: panel.labelDoubleClicked()
             }
         }
     }

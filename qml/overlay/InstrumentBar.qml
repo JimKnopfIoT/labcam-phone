@@ -23,6 +23,7 @@ Item {
     readonly property real _modeSize: Theme.fontSizeExtraSmall
     readonly property real _graphHeight: 0.5 * Theme.itemSizeExtraSmall
     readonly property real _pad: Theme.paddingSmall / 2
+    readonly property real _axisSize: Theme.fontSizeExtraSmall * 0.62   // scale labels in the graph
     // All panels the same height (DMM otherwise has a sub-text row instead of a value row -> shorter).
     readonly property real _panelHeight: Math.max(pDmm.implicitHeight, pBb3a.implicitHeight,
                                                    pBb3b.implicitHeight, pLcr.implicitHeight,
@@ -49,8 +50,12 @@ Item {
             width: bar.cellWidth
             valueSize: bar._valueSize; modeSize: bar._modeSize
             graphHeight: bar._graphHeight; pad: bar._pad
+            graph.axisFontSize: bar._axisSize
             height: bar._panelHeight
             deviceLabel: "DMM7510"
+            // Double tap on the name disconnects the instrument (no queries, no open connection).
+            labelInteractive: true
+            onLabelDoubleClicked: client.sendCommand({ cmd: "device_connection", device: "dmm", connected: !!client.dmm.disconnected })
             row2IsSub: true
             graph.colors: [Cfg.COLORS.voltage]
             graph.millisPerPixel: Cfg.CHARTS.dmm.millisPerPixel
@@ -60,10 +65,16 @@ Item {
         InstrumentPanel {
             id: pBb3a
             width: bar.cellWidth
+            graphInteractive: true          // tap on the graph: V / A / both
+            graph.perSeries: true           // V and A each get their own scale (otherwise A sits on the bottom edge)
+            graph.units: ["V", "A"]
             valueSize: bar._valueSize; modeSize: bar._modeSize
             graphHeight: bar._graphHeight; pad: bar._pad
+            graph.axisFontSize: bar._axisSize
             height: bar._panelHeight
             deviceLabel: "BB3 Ch1 PSU"
+            labelInteractive: true
+            onLabelDoubleClicked: client.sendCommand({ cmd: "device_connection", device: "bb3", connected: !!client.bb3a.disconnected })
             row1Mode: "CV"; row1Unit: "V"
             row2Mode: "CC"; row2Unit: "A"
             graph.colors: [Cfg.COLORS.voltage, Cfg.COLORS.current]
@@ -74,10 +85,16 @@ Item {
         InstrumentPanel {
             id: pBb3b
             width: bar.cellWidth
+            graphInteractive: true          // tap on the graph: V / A / both
+            graph.perSeries: true           // V and A each get their own scale (otherwise A sits on the bottom edge)
+            graph.units: ["V", "A"]
             valueSize: bar._valueSize; modeSize: bar._modeSize
             graphHeight: bar._graphHeight; pad: bar._pad
+            graph.axisFontSize: bar._axisSize
             height: bar._panelHeight
             deviceLabel: "USB"
+            labelInteractive: true
+            onLabelDoubleClicked: client.sendCommand({ cmd: "device_connection", device: "usb", connected: !!client.bb3b.disconnected })
             row1Mode: "V"; row1Unit: "V"
             row2Mode: "A"; row2Unit: "A"
             graph.colors: [Cfg.COLORS.voltage, Cfg.COLORS.current]
@@ -90,6 +107,7 @@ Item {
             width: bar.cellWidth
             valueSize: bar._valueSize; modeSize: bar._modeSize
             graphHeight: bar._graphHeight; pad: bar._pad
+            graph.axisFontSize: bar._axisSize
             height: bar._panelHeight
             deviceLabel: "DER EE DE-5000"
             row1Mode: "LCR"; row1Value: "—"
@@ -104,10 +122,16 @@ Item {
         InstrumentPanel {
             id: pKel
             width: bar.cellWidth
+            graphInteractive: true          // tap on the graph: V / A / both
+            graph.perSeries: true           // V and A each get their own scale (otherwise A sits on the bottom edge)
+            graph.units: ["V", "A"]
             valueSize: bar._valueSize; modeSize: bar._modeSize
             graphHeight: bar._graphHeight; pad: bar._pad
+            graph.axisFontSize: bar._axisSize
             height: bar._panelHeight
             deviceLabel: "KEL103"
+            labelInteractive: true
+            onLabelDoubleClicked: client.sendCommand({ cmd: "device_connection", device: "kel", connected: !!client.kel.disconnected })
             row1Unit: "V"
             row2Unit: "A"
             graph.colors: [Cfg.COLORS.voltage, Cfg.COLORS.current]
@@ -123,6 +147,9 @@ Item {
         var s = client.dmm
         pDmm.ok = s.ok
         pDmm.row1Mode = s.mode || "—"
+        pDmm.labelExtra = s.disconnected ? "disconnected" : ""
+        // Overflow (open leads / range exceeded) -> "OL", like on the instrument.
+        var overload = s.ok && Cfg.isOverload(s.value)
         if (s.ok) {
             var f = Cfg.fmtDmm(s.value, s.unit || "", s.mode, s.range)
             pDmm.row1Value = f.sign + f.num
@@ -131,22 +158,36 @@ Item {
             pDmm.row1Value = "—"; pDmm.row1Unit = ""
         }
 
-        var isShorted = s.ok && s.mode === "Diode" && s.value !== null
+        var isShorted = s.ok && !overload && s.mode === "Diode" && s.value !== null
                 && isFinite(s.value) && Math.abs(s.value) < 0.05
         pDmm.subText = isShorted ? "Shorted" : "—"
         pDmm.subColor = isShorted ? Cfg.COLORS.shorted : Cfg.COLORS.subtext
 
-        if (s.ok && s.value !== null && isFinite(s.value)) {
+        // Do NOT feed the overflow sentinel (9.9e37) into the graph: it blows up
+        // any scale and the rasterizer then discards the whole path (trace gone /
+        // black line). Insert a gap instead.
+        if (s.ok && overload) {
+            pDmm.graph.appendGap(0, Date.now())
+            // Keep the scale on the instrument range during overflow too, otherwise the
+            // axis label freezes on the last value (without a unit).
+            pDmm.graph.units = [s.unit || ""]
+            pDmm.graph.minValue = 0
+            pDmm.graph.maxValue = Cfg.dmmYMax(null, s.mode, Cfg.dmmEffectiveRange(s.range, s.mode))
+        } else if (s.ok && s.value !== null && isFinite(s.value)) {
+            pDmm.graph.units = [s.unit || ""]
             pDmm.graph.append(0, Date.now(), s.value)
             var eff = Cfg.dmmEffectiveRange(s.range, s.mode)
             pDmm.graph.minValue = 0
             pDmm.graph.maxValue = Cfg.dmmYMax(s.value, s.mode, eff)
+        } else {
+            pDmm.graph.appendGap(0, Date.now())
         }
     }
 
     // ---- Two-row devices (BB3 / USB / KEL) ----
     function _renderTwoLine(panel, s, opts) {
         panel.ok = s.ok
+        panel.labelExtra = s.disconnected ? "disconnected" : ""
         var isOff = s.output === false
         if (opts.modeSingle) panel.row1Mode = s.mode || "—"
 
@@ -171,11 +212,15 @@ Item {
                 panel.row1Aux = ""
                 panel.row2Aux = ""
             }
-            panel.labelExtra = (s.ok && s.protocol && s.protocol !== "—") ? s.protocol : ""
+            if (!s.disconnected)
+                panel.labelExtra = (s.ok && s.protocol && s.protocol !== "—") ? s.protocol : ""
         }
 
-        if (!isOff && s.ok && isFinite(s.voltage)) panel.graph.append(0, Date.now(), s.voltage)
-        if (!isOff && s.ok && isFinite(s.current)) panel.graph.append(1, Date.now(), s.current)
+        var live = !isOff && s.ok
+        if (live && isFinite(s.voltage)) panel.graph.append(0, Date.now(), s.voltage)
+        else                             panel.graph.appendGap(0, Date.now())
+        if (live && isFinite(s.current)) panel.graph.append(1, Date.now(), s.current)
+        else                             panel.graph.appendGap(1, Date.now())
     }
 
     // ---- LCR (DE-5000, CP2102 OR RN4871/BLE) ----
@@ -214,6 +259,7 @@ Item {
         pLcr.labelExtra = extra
 
         if (s.ok && s.value !== null && isFinite(s.value)) {
+            pLcr.graph.units = [s.unit || ""]
             pLcr.graph.append(0, Date.now(), s.value)
             pLcr.graph.minValue = 0
             pLcr.graph.maxValue = Cfg.lcrYMax(s.value)
