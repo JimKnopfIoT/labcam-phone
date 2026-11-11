@@ -49,7 +49,7 @@ internet.** Run it only inside a trusted LAN. Use at your own risk.
 
 ---
 
-AI assisted development
+LLM assisted development
 
 ## License
 
