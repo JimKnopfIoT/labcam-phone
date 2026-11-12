@@ -32,7 +32,8 @@ SOURCES += src/harbour-labcam.cpp \
     src/resourcehandler.cpp \
     src/storagemodel.cpp \
     src/imageoverlay.cpp \
-    src/thermalcamera.cpp
+    src/thermalcamera.cpp \
+    src/p2procontrol.cpp
 
 DISTFILES += \
     README.md \
@@ -98,7 +99,8 @@ HEADERS += \
     src/storagemodel.h \
     src/imageoverlay.h \
     src/componentid.h \
-    src/thermalcamera.h
+    src/thermalcamera.h \
+    src/p2procontrol.h
 
 CONFIG += c++11
 LIBS += -ldl -lpthread

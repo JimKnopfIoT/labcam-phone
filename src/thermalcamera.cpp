@@ -4,6 +4,7 @@
 // LabCam additions (C) 2026 the LabCam contributors.
 
 #include "thermalcamera.h"
+#include "p2procontrol.h"
 
 #include <QDebug>
 #include <QDir>
@@ -151,6 +152,74 @@ void ThermalCamera::setSharpen(double v)
     if (v < 0) v = 0; if (v > 4) v = 4;
     m_sharpen.store(v);
     emit sharpenChanged();
+}
+
+void ThermalCamera::setEmissivity(double v)
+{
+    if (v < 0.1) v = 0.1; if (v > 1.0) v = 1.0;
+    m_emissivity.store(v);
+    emit emissivityChanged();
+}
+
+void ThermalCamera::setReflectedTemp(double v)
+{
+    if (v < -40) v = -40; if (v > 100) v = 100;
+    m_reflectedTemp.store(v);
+    emit emissivityChanged();
+}
+
+void ThermalCamera::setHighRange(bool on)
+{
+    if (m_highRange.load() == on)
+        return;
+    m_highRange.store(on);
+    m_rangeDirty.store(true);
+    emit rangeChanged();
+}
+
+// Send the wanted gain to the P2 Pro behind m_dev and read it back. The camera
+// recalibrates itself meanwhile (~2.6 s busy). `quiet`: do not report a failure —
+// restoring the default range on start must not complain without a udev rule.
+bool ThermalCamera::applyRange(bool quiet)
+{
+    const bool want = m_highRange.load();
+    const QString node = p2pro::usbNodeFor(QFileInfo(m_dev).fileName());
+    QString err;
+    bool ok = false, got = !want;
+    if (node.isEmpty()) {
+        err = QStringLiteral("USB device of %1 not found").arg(m_dev);
+    } else {
+        const int fd = p2pro::openUsb(node);
+        if (fd < 0) {
+            err = (errno == EACCES || errno == EPERM)
+                ? QStringLiteral("No write access to %1 (udev rule needed)").arg(node)
+                : QStringLiteral("%1: %2").arg(node, QString::fromLocal8Bit(strerror(errno)));
+        } else {
+            // High gain = the default range, hence the negations.
+            bool high = want;
+            ok = p2pro::setHighGain(fd, !want, &err) && p2pro::getHighGain(fd, &high, &err);
+            ::close(fd);
+            got = !high;
+            if (!ok)
+                err = QStringLiteral("Measuring range: %1").arg(err);
+            else if (got != want) {
+                ok = false;
+                err = QStringLiteral("The camera did not take the measuring range");
+            }
+        }
+    }
+    qWarning() << "[thermal] range" << (want ? "100..600" : "-20..150") << node
+               << (ok ? "ok" : qPrintable(err));
+    if (ok)
+        m_highRangeActive.store(got);
+    else if (!quiet)
+        m_highRange.store(m_highRangeActive.load());   // show the range the camera is really in
+    {
+        QMutexLocker l(&m_mx);
+        m_rangeError = (ok || quiet) ? QString() : err;
+    }
+    emit rangeChanged();
+    return ok;
 }
 
 double ThermalCamera::tempAt(double nx, double ny)
@@ -302,6 +371,10 @@ void ThermalCamera::loop()
     }
     setStatus(QStringLiteral("Streaming %1").arg(m_dev));
 
+    // The P2 Pro starts in the default range; set the wanted one once frames flow.
+    m_rangeDirty.store(true);
+    bool rangeQuiet = !m_highRange.load();
+
     QImage img(SRC_W, IMG_H, QImage::Format_RGB32);
     bool firstFrame = true;
     std::vector<float> temps(SRC_W * IMG_H);   // temperature grid (deg C, without offset)
@@ -337,7 +410,12 @@ void ThermalCamera::loop()
         QImage fin = upscaleSharp(img, m_sharpen.load());   // x3 + unsharp (superfine)
 
         // ---- Decode temperature from the LOWER stream half (16-bit LE) ----
-        // P2 Pro: lower 256x192 = raw temperature, raw/64 - 273.15 = deg C.
+        // P2 Pro: lower 256x192 = raw temperature, raw/64 - 273.15 = deg C (apparent, eps = 1).
+        // Emissivity as a grey body: T^4 = (T_s^4 - (1-eps) * T_refl^4) / eps, in K.
+        const double eps = m_emissivity.load();
+        const bool emissCorr = eps < 0.999;
+        const double tRefl = m_reflectedTemp.load() + 273.15;
+        const double reflTerm = (1.0 - eps) * tRefl * tRefl * tRefl * tRefl;
         double tmin = 1e9, tmax = -1e9; int mnX = 0, mnY = 0, mxX = 0, mxY = 0;
         for (int y = 0; y < IMG_H; ++y) {
             const unsigned char *row = data + ((IMG_H + y) * w) * 2;
@@ -345,13 +423,19 @@ void ThermalCamera::loop()
             for (int x = 0; x < w; ++x) {
                 int raw = row[x * 2] | (row[x * 2 + 1] << 8);
                 double c = raw / 64.0 - 273.15;
+                if (emissCorr) {
+                    const double k = c + 273.15;
+                    const double wq = (k * k * k * k - reflTerm) / eps;
+                    c = (wq > 0 ? std::sqrt(std::sqrt(wq)) : 0.0) - 273.15;
+                }
                 trow[x] = float(c);
                 if (c < tmin) { tmin = c; mnX = x; mnY = y; }
                 if (c > tmax) { tmax = c; mxX = x; mxY = y; }
             }
         }
         // Plausibility check — mark as invalid if values are out of range.
-        bool tok = (tmax > -60.0 && tmax < 600.0 && tmin > -60.0 && tmin < 600.0);
+        // Upper limit 1000: with eps < 1 the corrected value exceeds the camera's 600 deg C.
+        bool tok = (tmax > -60.0 && tmax < 1000.0 && tmin > -60.0 && tmin < 1000.0);
         if (tok) {
             if (!emaInit) { emaLo = tmin; emaHi = tmax; emaInit = true; }
             else { emaLo = RANGE_SMOOTH * emaLo + (1 - RANGE_SMOOTH) * tmin;
@@ -376,11 +460,19 @@ void ThermalCamera::loop()
         emit frameReady(m_id);
         if (tok) emit tempUpdated();
         xioctl(fd, VIDIOC_QBUF, &b);
+        // Range switch only after requeueing the buffer: the camera is busy for ~3 s.
+        if (m_rangeDirty.exchange(false)) {
+            if (applyRange(rangeQuiet))
+                emaInit = false;                // new range: let min/max settle again
+            rangeQuiet = false;
+        }
     }
 
     xioctl(fd, VIDIOC_STREAMOFF, &type);
     for (unsigned i = 0; i < nbuf; ++i) munmap(bufs[i].start, bufs[i].len);
     ::close(fd);
+    if (m_highRangeActive.exchange(false))
+        emit rangeChanged();                    // replugged = back in the default range
     setStatus(QStringLiteral("stopped"));
 }
 

@@ -220,8 +220,8 @@ It is also listed as a `Requires:` in `rpm/harbour-labcam.yaml`.
   `qml/overlay/OverlayConfig.js` (default points at an example LAN address; change
   it to your data server).
 * **Component-ID service URL** — in `src/componentid.cpp`.
-* The thermal device path defaults to `/dev/video2` (overridable in
-  `ThermalCamera::start`).
+* The thermal camera is found by its USB ID (`0bda:5830`), whatever `/dev/videoN`
+  node it lands on.
 
 The data server's JSON STATE schema (the contract this app consumes) is documented
 in the companion PC package. This repository does not include the server.
@@ -235,8 +235,29 @@ in the companion PC package. This repository does not include the server.
   permission was needed. The live viewfinder crop/zoom for IR alignment affects
   the live view only, not the saved photo (the photo uses the full sensor /
   on-screen IR position).
-* Temperature accuracy is good below ~160 °C; very hot targets may clip and
-  benefit from emissivity handling that is out of scope here.
+* **Measuring range**: the "150°/600°" button switches the P2 Pro between
+  −20 … 150 °C and 100 … 600 °C. The camera recalibrates itself, so the picture
+  stands still for about three seconds. The switch is a vendor command over the
+  USB device node (`/dev/bus/usb/…`), which only root can write by default; add
+  this udev rule once (as root), then replug the camera:
+
+  ```sh
+  cat >> /etc/udev/rules.d/999-labcam.rules <<'EOR'
+  SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="0bda", ATTR{idProduct}=="5830", GROUP="video", MODE="0660"
+  EOR
+  udevadm control --reload-rules
+  ```
+
+  On Sailfish OS 5.2 on the Jolla Phone (2026) the video node itself also needs
+  `SUBSYSTEM=="video4linux", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="5830", GROUP="video", MODE="0660"`
+  in the same file. Protocol from
+  [P2Pro-Viewer](https://github.com/LeoDJ/P2Pro-Viewer) (LeoDJ, MIT) and
+  [p2-viewer](https://github.com/lbatalha/p2-viewer) (lbatalha, MIT).
+* **Emissivity**: the "ε" button opens a slider (0.10–1.00). Below 1.00 every
+  reading is corrected as a grey body against 20 °C reflected temperature. Matte
+  surfaces need about 0.95, soldering tips and oxidised metal about 0.7 (a JBC tip
+  read right at 0.73 from 220 to 450 °C). Fine-tune against something of known
+  temperature; polished metal cannot be measured reliably.
 
 ---
 

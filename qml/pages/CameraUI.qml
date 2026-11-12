@@ -48,6 +48,22 @@ Page {
     // P2-Pro temperature (lower stream half -> degrees C in C++): optional overlays.
     property bool irShowMarkers: false   // hotspots (min/max) + tap measurement points
     property bool irShowBar: false       // temperature scale/colorbar on the right
+    property bool irEmissOpen: false     // emissivity slider open
+
+    // P2 Pro: bind emissivity + measuring range from dconf to the camera.
+    Binding { target: thermalCam; property: "emissivity"; value: settings.global.irEmissivity }
+    Binding { target: thermalCam; property: "reflectedTemp"; value: settings.global.irReflectedTemp }
+    Binding { target: thermalCam; property: "highRange"; value: settings.global.irHighRange }
+    Connections {
+        target: thermalCam
+        // A failed switch falls back to the range the camera is really in; show the message.
+        onRangeChanged: {
+            if (settings.global.irHighRange !== thermalCam.highRange)
+                settings.global.irHighRange = thermalCam.highRange
+            if (thermalCam.rangeError !== "")
+                irToast.show(thermalCam.rangeError, 5000)
+        }
+    }
     // IR camera status: has a frame arrived since switch-on? And did we wait long enough
     // (probe) to show "no camera detected"?
     property bool _irFrameSeen: false
@@ -457,7 +473,6 @@ Page {
             onClicked: doShutter()
         }
 
-
         RoundButton {
             id: teleLense
             image: camera.deviceId == "1" ? "../pics/icon-m-tele-lense-active.png" : "../pics/icon-m-tele-lense.png"
@@ -496,7 +511,6 @@ Page {
             rotation: page.controlsRotation
             visible: checkIfCamExists("2") && (camera.videoRecorder.recorderStatus !== CameraRecorder.RecordingStatus) && settings.global.cameraCount > 3 && settings.global.enableWideCameraButtons
         }
-
 
         Rectangle {
             id: rectFlash
@@ -610,6 +624,223 @@ Page {
                         exposureCompensationSlider.value = camera.exposure.exposureCompensation
                     }
                 }
+            }
+        }
+
+        // ---- Lab/IR buttons at the edge, inside the camera frame (turns with the controls) ----
+        // Portrait (frame turned by 90/270): two rows along the frame's bottom and top edge
+        // = at the left/right screen edge, above the photo/video switch and the camera
+        // switch. Landscape: one column each, inside next to the settings column and
+        // left of the shutter. x/y only, no conditional anchors (they stretch buttons).
+        readonly property bool _portraitPage: page.orientation === Orientation.Portrait
+                                              || page.orientation === Orientation.PortraitInverted
+        Grid {
+            id: labButtons
+            columns: controlsContainer._portraitPage ? 4 : 1
+            layoutDirection: Qt.RightToLeft      // portrait: instruments at the bottom of the edge
+            spacing: Theme.paddingMedium
+            // The photo/video switch is taller than wide and gets rotated: align to its
+            // VISIBLE extent and centre, not to the unrotated box.
+            readonly property real _modeHalf: (btnModeSwitch.rotation % 180 !== 0
+                                               ? btnModeSwitch.height : btnModeSwitch.width) / 2
+            x: controlsContainer._portraitPage
+               ? btnModeSwitch.x + btnModeSwitch.width / 2 - _modeHalf - width - Theme.paddingLarge
+               : 2 * Theme.itemSizeSmall + 4 * Theme.paddingMedium
+            y: controlsContainer._portraitPage
+               ? btnModeSwitch.y + btnModeSwitch.height / 2 - height / 2
+               : (parent.height - height) / 2
+            RoundButton {
+                id: btnInstruments
+                size: Theme.itemSizeSmall
+                rotation: page.controlsRotation
+                icon.source: "image://theme/icon-m-developer-mode"
+                icon.opacity: page.showInstruments ? 1.0 : 0.4
+                onClicked: page.showInstruments = !page.showInstruments
+            }
+            // P2 Pro thermal camera: one tap = area, again = fullscreen, again = off.
+            RoundButton {
+                id: btnIr
+                size: Theme.itemSizeSmall
+                rotation: page.controlsRotation
+                icon.source: "image://theme/icon-m-levels"
+                icon.opacity: page.irMode > 0 ? 1.0 : 0.4
+                onClicked: {
+                    var was = page.irMode
+                    page.irMode = (page.irMode + 1) % 3
+                    if (page.irMode > 0) {
+                        if (was === 0) {                 // turning IR on -> start camera + probe
+                            page._irFrameSeen = false
+                            page._irProbed = false
+                            thermalCam.start()
+                            irProbeTimer.restart()
+                        }
+                    } else {                             // IR off
+                        thermalCam.stop()
+                        irProbeTimer.stop()
+                        page._irProbed = false
+                    }
+                }
+            }
+            // ---- Component ID: toggle button ----
+            RoundButton {
+                id: btnComponent
+                size: Theme.itemSizeSmall
+                rotation: page.controlsRotation
+                icon.source: "image://theme/icon-m-search"
+                icon.opacity: page.componentMode ? 1.0 : 0.4
+                onClicked: page.componentMode = !page.componentMode
+            }
+            // ---- "Save photo with text" (only when a result is available) ----
+            RoundButton {
+                id: btnSaveResult
+                size: Theme.itemSizeSmall
+                visible: page.componentMode
+                rotation: page.controlsRotation
+                icon.source: "image://theme/icon-m-image"
+                icon.opacity: componentCard.result !== null ? 1.0 : 0.4
+                onClicked: page.saveResultImage()
+            }
+        
+        }
+
+        // IR sub-buttons, only while IR is active
+        Grid {
+            id: irButtons
+            visible: page.irMode > 0
+            columns: controlsContainer._portraitPage ? 4 : 1
+            layoutDirection: Qt.RightToLeft      // portrait: markers at the bottom of the edge
+            spacing: Theme.paddingMedium
+            x: controlsContainer._portraitPage
+               ? (btnCameraSwitch.visible ? btnCameraSwitch.x : parent.width) - width - Theme.paddingLarge
+               : btnCapture.x - width - Theme.paddingLarge
+            y: controlsContainer._portraitPage
+               ? (btnCameraSwitch.visible ? btnCameraSwitch.y + btnCameraSwitch.height / 2 - height / 2
+                                          : Theme.paddingMedium)
+               : (parent.height - height) / 2
+                // ---- P2 Pro temperature: hotspots/measurement points on/off (only when IR is active) ----
+            RoundButton {
+                id: btnIrMarkers
+                size: Theme.itemSizeSmall
+                rotation: page.controlsRotation
+                icon.source: "image://theme/icon-m-location"
+                icon.opacity: page.irShowMarkers ? 1.0 : 0.4
+                onClicked: {
+                    page.irShowMarkers = !page.irShowMarkers
+                    thermalOverlay.requestPaint()
+                }
+            }
+            // ---- P2 Pro temperature: colorbar on/off (only when IR is active) ----
+            RoundButton {
+                id: btnIrBar
+                size: Theme.itemSizeSmall
+                rotation: page.controlsRotation
+                icon.source: "image://theme/icon-m-levels"
+                icon.opacity: page.irShowBar ? 1.0 : 0.4
+                onClicked: {
+                    page.irShowBar = !page.irShowBar
+                    thermalOverlay.requestPaint()
+                }
+            }
+            // ---- P2 Pro measuring range: 150 °C / 600 °C (only when IR is active) ----
+            // Shows the upper limit of the range; lit in the 600 °C range. The camera is busy for
+            // ~3 s after a switch (it recalibrates itself); the picture stands still meanwhile.
+            RoundButton {
+                id: btnIrRange
+                size: Theme.itemSizeSmall
+                rotation: page.controlsRotation
+                onClicked: {
+                    settings.global.irHighRange = !settings.global.irHighRange
+                    irToast.show(settings.global.irHighRange ? "100 … 600 °C" : "−20 … 150 °C", 1200)
+                }
+                Label {
+                    anchors.centerIn: parent
+                    text: settings.global.irHighRange ? "600°" : "150°"
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.bold: true
+                    color: Theme.primaryColor
+                    opacity: settings.global.irHighRange ? 1.0 : 0.5
+                }
+            }
+            // ---- P2 Pro emissivity: a tap opens/closes the slider ----
+            RoundButton {
+                id: btnIrEmiss
+                size: Theme.itemSizeSmall
+                rotation: page.controlsRotation
+                onClicked: page.irEmissOpen = !page.irEmissOpen
+                Label {
+                    anchors.centerIn: parent
+                    text: "ε" + settings.global.irEmissivity.toFixed(2).substring(1)
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    font.bold: true
+                    color: Theme.primaryColor
+                    opacity: settings.global.irEmissivity < 0.995 || page.irEmissOpen ? 1.0 : 0.5
+                }
+            }
+        
+        }
+
+        // Emissivity slider, turns with the buttons. Lives in the camera frame,
+        // not in irView — otherwise it would be burned into the photo.
+        Rectangle {
+            id: irEmissPanel
+            visible: page.irMode > 0 && page.irEmissOpen
+            z: 3
+            anchors.centerIn: parent
+            rotation: page.controlsRotation
+            readonly property real room: page.controlsRotation % 180 !== 0 ? parent.height : parent.width
+            width: Math.min(room, Math.min(parent.width, parent.height) * 1.6) - 2 * Theme.paddingLarge
+            height: emissCol.height + 2 * Theme.paddingMedium
+            radius: Theme.paddingMedium
+            color: "#cc000000"
+            Column {
+                id: emissCol
+                anchors.centerIn: parent
+                width: parent.width
+                Slider {
+                    width: parent.width
+                    label: "Emissivity (matte 0.95, soldering tip ~0.73) — fine-tune on a known temperature"
+                    minimumValue: 0.1
+                    maximumValue: 1.0
+                    stepSize: 0.01
+                    value: settings.global.irEmissivity
+                    valueText: value >= 0.995 ? "off (1.00)" : value.toFixed(2)
+                    onValueChanged: settings.global.irEmissivity = value
+                }
+            }
+        }
+
+        // Short message (measuring range, switch errors); turns with the buttons.
+        Rectangle {
+            id: irToast
+            z: 3
+            anchors.centerIn: parent
+            rotation: page.controlsRotation
+            readonly property real room: (page.controlsRotation % 180 !== 0 ? parent.height : parent.width)
+                                         - 4 * Theme.paddingLarge
+            width: irToastLabel.width + 2 * Theme.paddingLarge
+            height: irToastLabel.height + Theme.paddingMedium
+            radius: height / 2
+            color: "#a6000000"
+            opacity: 0
+            visible: opacity > 0
+            function show(text, ms) {
+                irToastLabel.text = text
+                irToastPause.duration = ms || 1200
+                irToastAnim.restart()
+            }
+            Label {
+                id: irToastLabel
+                anchors.centerIn: parent
+                width: Math.min(implicitWidth, irToast.room)
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
+                color: "white"
+            }
+            SequentialAnimation {
+                id: irToastAnim
+                NumberAnimation { target: irToast; property: "opacity"; to: 1; duration: 100 }
+                PauseAnimation { id: irToastPause; duration: 1200 }
+                NumberAnimation { target: irToast; property: "opacity"; to: 0; duration: 300 }
             }
         }
 
@@ -948,94 +1179,6 @@ Page {
         }
     }
 
-    RoundButton {
-        id: btnInstruments
-        size: Theme.itemSizeSmall
-        anchors {
-            bottom: parent.bottom
-            bottomMargin: Theme.paddingMedium
-            left: parent.left
-            leftMargin: Theme.paddingMedium
-        }
-        rotation: page.controlsRotation
-        icon.source: "image://theme/icon-m-developer-mode"
-        icon.opacity: page.showInstruments ? 1.0 : 0.4
-        onClicked: page.showInstruments = !page.showInstruments
-    }
-
-    // P2 Pro thermal camera: one tap = area, again = fullscreen, again = off.
-    RoundButton {
-        id: btnIr
-        size: Theme.itemSizeSmall
-        anchors {
-            bottom: btnInstruments.top
-            bottomMargin: Theme.paddingMedium
-            left: parent.left
-            leftMargin: Theme.paddingMedium
-        }
-        rotation: page.controlsRotation
-        icon.source: "image://theme/icon-m-levels"
-        icon.opacity: page.irMode > 0 ? 1.0 : 0.4
-        onClicked: {
-            var was = page.irMode
-            page.irMode = (page.irMode + 1) % 3
-            if (page.irMode > 0) {
-                if (was === 0) {                 // turning IR on -> start camera + probe
-                    page._irFrameSeen = false
-                    page._irProbed = false
-                    thermalCam.start()
-                    irProbeTimer.restart()
-                }
-            } else {                             // IR off
-                thermalCam.stop()
-                irProbeTimer.stop()
-                page._irProbed = false
-            }
-        }
-    }
-
-    // ---- P2 Pro temperature: hotspots/measurement points on/off (only when IR is active) ----
-    RoundButton {
-        id: btnIrMarkers
-        size: Theme.itemSizeSmall
-        visible: page.irMode > 0
-        z: 2
-        anchors {
-            bottom: parent.bottom
-            bottomMargin: Theme.paddingMedium
-            right: parent.right
-            rightMargin: Theme.paddingMedium
-        }
-        rotation: page.controlsRotation
-        icon.source: "image://theme/icon-m-location"
-        icon.opacity: page.irShowMarkers ? 1.0 : 0.4
-        onClicked: {
-            page.irShowMarkers = !page.irShowMarkers
-            thermalOverlay.requestPaint()
-        }
-    }
-
-    // ---- P2 Pro temperature: colorbar on/off (only when IR is active) ----
-    RoundButton {
-        id: btnIrBar
-        size: Theme.itemSizeSmall
-        visible: page.irMode > 0
-        z: 2
-        anchors {
-            bottom: btnIrMarkers.top
-            bottomMargin: Theme.paddingMedium
-            right: parent.right
-            rightMargin: Theme.paddingMedium
-        }
-        rotation: page.controlsRotation
-        icon.source: "image://theme/icon-m-levels"
-        icon.opacity: page.irShowBar ? 1.0 : 0.4
-        onClicked: {
-            page.irShowBar = !page.irShowBar
-            thermalOverlay.requestPaint()
-        }
-    }
-
     // ---- Component ID: selection frame -- white corner brackets only ----
     // Portrait: to the RIGHT of the instrument strip (does not overlap it).
     // Landscape: BELOW the instruments. Size adapted to the available area.
@@ -1094,39 +1237,6 @@ Page {
             color: "white"
             font.pixelSize: Theme.fontSizeExtraSmall
         }
-    }
-
-    // ---- Component ID: toggle button ----
-    RoundButton {
-        id: btnComponent
-        size: Theme.itemSizeSmall
-        anchors {
-            bottom: btnIr.top            // above the IR button (stack: instruments->IR->magnifier->save)
-            bottomMargin: Theme.paddingMedium
-            left: parent.left
-            leftMargin: Theme.paddingMedium
-        }
-        rotation: page.controlsRotation
-        icon.source: "image://theme/icon-m-search"
-        icon.opacity: page.componentMode ? 1.0 : 0.4
-        onClicked: page.componentMode = !page.componentMode
-    }
-
-    // ---- "Save photo with text" (only when a result is available) ----
-    RoundButton {
-        id: btnSaveResult
-        size: Theme.itemSizeSmall
-        visible: page.componentMode
-        anchors {
-            bottom: btnComponent.top
-            bottomMargin: Theme.paddingMedium
-            left: parent.left
-            leftMargin: Theme.paddingMedium
-        }
-        rotation: page.controlsRotation
-        icon.source: "image://theme/icon-m-image"
-        icon.opacity: componentCard.result !== null ? 1.0 : 0.4
-        onClicked: page.saveResultImage()
     }
 
     // ---- Component ID: result card ----
@@ -1205,7 +1315,6 @@ Page {
             componentCard.result = null
         }
     }
-
 
     MouseArea {
         id: mouseFocusArea

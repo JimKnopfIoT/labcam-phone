@@ -25,6 +25,10 @@ Item {
         property bool enableWideCameraButtons: true
         property string disabledCameras: ""
         property bool showManualControls: false
+        // P2 Pro: emissivity (1 = camera value), reflected temperature, 600 °C measuring range
+        property real irEmissivity: 1.0
+        property real irReflectedTemp: 20.0
+        property bool irHighRange: false
 
         ConfigurationGroup {
             id: modeSettings

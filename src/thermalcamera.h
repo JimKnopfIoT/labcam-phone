@@ -39,6 +39,16 @@ class ThermalCamera : public QObject
     Q_PROPERTY(double tempOffset READ tempOffset WRITE setTempOffset NOTIFY tempOffsetChanged)
     // Sharpening (unsharp mask) applied to the upscaled image; 0 = off, ~1.2 = default.
     Q_PROPERTY(double sharpen READ sharpen WRITE setSharpen NOTIFY sharpenChanged)
+    // Emissivity (0.1..1). Below 1 every temperature is corrected as a grey body against the
+    // reflected temperature; 1 = camera value unchanged (as before).
+    Q_PROPERTY(double emissivity READ emissivity WRITE setEmissivity NOTIFY emissivityChanged)
+    Q_PROPERTY(double reflectedTemp READ reflectedTemp WRITE setReflectedTemp NOTIFY emissivityChanged)
+    // Measuring range: false = -20..150 °C (high gain, the camera's power-on state),
+    // true = 100..600 °C (low gain). Set on every stream start and every change;
+    // highRangeActive = what the camera last confirmed.
+    Q_PROPERTY(bool highRange READ highRange WRITE setHighRange NOTIFY rangeChanged)
+    Q_PROPERTY(bool highRangeActive READ highRangeActive NOTIFY rangeChanged)
+    Q_PROPERTY(QString rangeError READ rangeError NOTIFY rangeChanged)   // empty = ok
 public:
     explicit ThermalCamera(QObject *parent = nullptr);
     ~ThermalCamera() override;
@@ -57,6 +67,14 @@ public:
     void setTempOffset(double v);
     double sharpen() const { return m_sharpen; }
     void setSharpen(double v);
+    double emissivity() const { return m_emissivity.load(); }
+    void setEmissivity(double v);
+    double reflectedTemp() const { return m_reflectedTemp.load(); }
+    void setReflectedTemp(double v);
+    bool highRange() const { return m_highRange.load(); }
+    void setHighRange(bool on);
+    bool highRangeActive() const { return m_highRangeActive.load(); }
+    QString rangeError() { QMutexLocker l(&m_mx); return m_rangeError; }
 
     // Thread-safe copy of the most recent frame (for the ImageProvider).
     QImage currentFrame();
@@ -75,10 +93,13 @@ signals:
     void tempUpdated();
     void tempOffsetChanged();
     void sharpenChanged();
+    void emissivityChanged();
+    void rangeChanged();
 
 private:
     void loop();                         // runs in the worker thread
     void setStatus(const QString &s);
+    bool applyRange(bool quiet);         // worker thread; true = switched
 
     QString m_dev;
     QString m_status;
@@ -96,6 +117,12 @@ private:
     bool m_tempValid{false};
     std::atomic<double> m_tempOffset{0.0};
     std::atomic<double> m_sharpen{1.2};
+    std::atomic<double> m_emissivity{1.0};
+    std::atomic<double> m_reflectedTemp{20.0};
+    std::atomic<bool> m_highRange{false};
+    std::atomic<bool> m_highRangeActive{false};
+    std::atomic<bool> m_rangeDirty{false};   // set from QML, picked up by the worker
+    QString m_rangeError;                    // under m_mx
 };
 
 // Exposes the most recent thermal frame as image://thermal/<id>.
