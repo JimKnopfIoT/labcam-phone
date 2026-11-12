@@ -54,6 +54,12 @@ Page {
     Binding { target: thermalCam; property: "emissivity"; value: settings.global.irEmissivity }
     Binding { target: thermalCam; property: "reflectedTemp"; value: settings.global.irReflectedTemp }
     Binding { target: thermalCam; property: "highRange"; value: settings.global.irHighRange }
+    // Component-ID service: address from the settings, empty = built-in default.
+    Binding {
+        target: componentId; property: "serviceUrl"
+        value: settings.global.componentService
+        when: settings.global.componentService !== ""
+    }
     Connections {
         target: thermalCam
         // A failed switch falls back to the range the camera is really in; show the message.

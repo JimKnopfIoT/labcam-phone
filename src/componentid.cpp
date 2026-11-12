@@ -24,7 +24,7 @@ static QString toLocalPath(const QString &p)
 
 ComponentId::ComponentId(QObject *parent)
     : QObject(parent),
-      m_serviceUrl(QStringLiteral("http://192.168.10.6:7895/identify")),
+      m_serviceUrl(),   // set under Settings → General (e.g. http://<pc-ip>:7895/identify)
       m_busy(false)
 {
     // Disable system proxy for local LAN requests (prevents "unknown error" via proxy).
@@ -51,6 +51,10 @@ void ComponentId::identify(const QString &photoPathIn,
                            double nx, double ny, double nw, double nh,
                            const QString &dmmJson)
 {
+    if (m_serviceUrl.isEmpty()) {
+        emit failed(QStringLiteral("Component-ID service not set (Settings → General)"));
+        return;
+    }
     const QString photoPath = toLocalPath(photoPathIn);
 
     QImageReader reader(photoPath);

@@ -321,6 +321,29 @@ Item {
                     width: parent.width
                     height: childrenRect.height
                     spacing: Theme.paddingMedium
+
+                    // Network addresses of the PC services (empty = built-in default).
+                    TextField {
+                        width: parent.width
+                        label: qsTr("Instrument server")
+                        placeholderText: qsTr("Instrument server, e.g. ws://<pc-ip>:7891")
+                        text: settings.global.instrumentServer
+                        inputMethodHints: Qt.ImhUrlCharactersOnly | Qt.ImhNoAutoUppercase
+                        EnterKey.iconSource: "image://theme/icon-m-enter-next"
+                        EnterKey.onClicked: focus = false
+                        onActiveFocusChanged: if (!activeFocus) settings.global.instrumentServer = text.trim()
+                    }
+                    TextField {
+                        width: parent.width
+                        label: qsTr("Component-ID service")
+                        placeholderText: qsTr("Component-ID service, e.g. http://<pc-ip>:7895/identify")
+                        text: settings.global.componentService
+                        inputMethodHints: Qt.ImhUrlCharactersOnly | Qt.ImhNoAutoUppercase
+                        EnterKey.iconSource: "image://theme/icon-m-enter-close"
+                        EnterKey.onClicked: focus = false
+                        onActiveFocusChanged: if (!activeFocus) settings.global.componentService = text.trim()
+                    }
+
                     TextSwitch {
                         id: zoomSwitch
                         text: qsTr("Swap zoom controls")

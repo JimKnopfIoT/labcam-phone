@@ -216,10 +216,11 @@ It is also listed as a `Requires:` in `rpm/harbour-labcam.yaml`.
 
 ## Configuration
 
-* **Instrument WebSocket URL** — `DEFAULT_WS_URL` in
-  `qml/overlay/OverlayConfig.js` (default points at an example LAN address; change
-  it to your data server).
-* **Component-ID service URL** — in `src/componentid.cpp`.
+* **Instrument server** and **Component-ID service** — enter them under
+  Settings → General, e.g. `ws://<pc-ip>:7891` and
+  `http://<pc-ip>:7895/identify`. Both are empty by default; until they are set
+  the instrument bar stays disconnected and component ID reports that the
+  service is not set. (Stored in dconf under `/harbour-labcam`.)
 * The thermal camera is found by its USB ID (`0bda:5830`), whatever `/dev/videoN`
   node it lands on.
 

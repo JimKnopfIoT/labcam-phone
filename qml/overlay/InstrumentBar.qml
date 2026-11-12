@@ -34,7 +34,9 @@ Item {
 
     InstrumentClient {
         id: client
-        wsUrl: Cfg.DEFAULT_WS_URL
+        // Address from the settings; empty = built-in default.
+        wsUrl: settings.global.instrumentServer !== "" ? settings.global.instrumentServer
+                                                       : Cfg.DEFAULT_WS_URL
         onStateUpdated: bar._render()
     }
 

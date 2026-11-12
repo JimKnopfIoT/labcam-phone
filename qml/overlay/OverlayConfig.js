@@ -14,7 +14,7 @@
 // ---------- Backend ----------
 // Default WebSocket URL. The phone has no "same host as HTML" concept,
 // so the lab PC IP must be set here (or via Settings).
-var DEFAULT_WS_URL = "ws://192.168.10.6:7891"
+var DEFAULT_WS_URL = ""   // set under Settings → General (e.g. ws://<pc-ip>:7891)
 
 // ---------- Colors (from config.js) ----------
 var COLORS = {

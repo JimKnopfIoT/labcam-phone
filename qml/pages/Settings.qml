@@ -29,6 +29,9 @@ Item {
         property real irEmissivity: 1.0
         property real irReflectedTemp: 20.0
         property bool irHighRange: false
+        // Network addresses of the PC services; empty = built-in default (OverlayConfig / ComponentId)
+        property string instrumentServer: ""     // ws://<pc>:7891
+        property string componentService: ""     // http://<pc>:7895/identify
 
         ConfigurationGroup {
             id: modeSettings
