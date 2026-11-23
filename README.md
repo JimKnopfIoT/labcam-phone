@@ -67,7 +67,8 @@ LLM assisted development
 
 A QtWebSockets client connects to a **lab data server** on the network that
 broadcasts instrument readings as JSON (~5 Hz). The overlay shows up to five
-panels with two value rows each plus a scrolling history graph:
+panels with two value rows each plus a scrolling history graph, and a sixth
+one for a solder station:
 
 | Panel | Typical device          | Shows                          |
 |-------|-------------------------|--------------------------------|
@@ -76,10 +77,16 @@ panels with two value rows each plus a scrolling history graph:
 | USB   | USB power tester        | V/A, D+/D−, charging protocol  |
 | LOAD  | electronic load         | mode (CC/CV/CR/CW), V/A        |
 | LCR   | LCR meter (DER EE DE-5000)| L/C/R + secondary D/Q/ESR/θ, test frequency |
+| JBC   | JBC DME-2A solder station | per port: state dot, tool, tip temperature / set point |
 
 The LCR panel reads a **DER EE DE-5000** — over a wired USB-serial adapter or a
 BLE "Transparent UART" module. Tap the panel name to toggle the source; the
 backend switches between the two (`{"cmd":"lcr_source","value":"toggle"}`).
+
+The JBC panel appears only when the server reports a station (key `jbc`; protocol
+in [jbc-dme-monitor](https://github.com/JimKnopfIoT/jbc-dme-monitor)). The tip
+temperature is coloured from cold (cyan) to hot (orange), red when it is more than
+25 K above the set point.
 
 Double-tap an instrument's name to disconnect it, so you can work at the instrument
 itself; the panel shows `—` and "disconnected" until you double-tap again. Tap a
@@ -93,11 +100,11 @@ for ~32 s until the old trace has scrolled off the graph. Diode mode is always
 shown in volts; a near-zero reading shows a red **"Shorted"**.
 
 Layout adapts to orientation (derived from the page geometry, not guessed from
-the bar): four/five panels across the top in landscape, a narrow strip on the
+the bar): four/five panels (six with the JBC station) across the top in landscape, a narrow strip on the
 left/top in portrait.
 
 New files: `qml/overlay/InstrumentClient.qml`, `InstrumentBar.qml`,
-`InstrumentPanel.qml`, `ScrollGraph.qml`, `OverlayConfig.js`.
+`InstrumentPanel.qml`, `ScrollGraph.qml`, `JbcPanel.qml`, `OverlayConfig.js`.
 
 ### 2. Burn overlay into the photo (new)
 

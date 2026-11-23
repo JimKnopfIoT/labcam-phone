@@ -18,6 +18,8 @@ Item {
     property var kel:  ({ ok: false, mode: "—", voltage: null, current: null, output: null })
     property var lcr:  ({ ok: false, source: "cp2102", status: "—", mode: "—", value: null,
                           unit: "", sec_mode: "", sec_value: null, sec_unit: "", freq: null })
+    // JBC DME-2A: null as long as the backend sends no "jbc" key (the panel stays hidden).
+    property var jbc: null
 
     property double lastTs: 0
 
@@ -31,6 +33,7 @@ Item {
         if (d.bb3b) root.bb3b = d.bb3b
         if (d.kel)  root.kel  = d.kel
         if (d.lcr)  root.lcr  = d.lcr
+        if (d.jbc)  root.jbc  = d.jbc
         if (state.ts) root.lastTs = state.ts
         root.stateUpdated()
     }

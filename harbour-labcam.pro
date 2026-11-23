@@ -64,7 +64,8 @@ DISTFILES += \
     qml/overlay/ScrollGraph.qml \
     qml/overlay/InstrumentPanel.qml \
     qml/overlay/InstrumentBar.qml \
-    qml/overlay/ComponentCard.qml
+    qml/overlay/ComponentCard.qml \
+    qml/overlay/JbcPanel.qml
 
 
 SAILFISHAPP_ICONS = 86x86 108x108 128x128 172x172

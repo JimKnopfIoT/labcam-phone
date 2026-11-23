@@ -30,7 +30,15 @@ var COLORS = {
     subtext: "#6a7a7c",
 
     offlineLabel: "#cc6666",
-    shorted:      "#cc6666"
+    shorted:      "#cc6666",
+
+    // JBC DME-2A (same palette as labcam-web / PM5)
+    jbcWork:  "#ff8a00",
+    jbcStand: "#ffb44a",
+    jbcSleep: "#b58cff",
+    jbcHiber: "#19d2ff",
+    jbcTeal:  "#31e0a0",
+    jbcHot:   "#ff5a52"
 }
 
 // ---------- Graph defaults ----------

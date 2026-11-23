@@ -13,7 +13,7 @@ Item {
     // Orientation is passed in explicitly from the page (NOT inferred from the bar's
     // geometry -- a bar docked at the top is always wider than it is tall).
     property bool portrait: false
-    property int columns: portrait ? 1 : 5           // Portrait: 1 column stacked on the left; Landscape: 5 side-by-side at the top
+    property int columns: portrait ? 1 : (pJbc.visible ? 6 : 5)   // Portrait: 1 column stacked on the left; Landscape: 5 (+JBC) side-by-side at the top
     readonly property real gap: Theme.paddingSmall
     readonly property real cellWidth: (width - (columns - 1) * gap) / columns
 
@@ -139,6 +139,18 @@ Item {
             graph.colors: [Cfg.COLORS.voltage, Cfg.COLORS.current]
             graph.millisPerPixel: Cfg.CHARTS.kel.millisPerPixel
             graph.maxValue: NaN        // Auto-scale (kel has no fixed maxValue)
+        }
+        JbcPanel {
+            id: pJbc
+            visible: client.jbc !== null        // only once the backend knows the station
+            width: bar.cellWidth
+            height: bar._panelHeight
+            pad: bar._pad
+            rowSize: bar._modeSize
+            labelSize: Theme.fontSizeExtraSmall
+            jbc: client.jbc
+            onLabelDoubleClicked: client.sendCommand({ cmd: "device_connection", device: "jbc",
+                                                       connected: !!(client.jbc && client.jbc.disconnected) })
         }
     }
 
