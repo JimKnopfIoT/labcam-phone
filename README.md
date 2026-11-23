@@ -269,6 +269,15 @@ in the companion PC package. This repository does not include the server.
 
 ---
 
+## Related projects
+
+* [labcam-pc](https://github.com/JimKnopfIoT/labcam-pc) — the PC side: instrument server, web dashboard,
+  thermal and microscope streams, component ID.
+* [harbour-ircam](https://github.com/JimKnopfIoT/harbour-ircam) — LabCam's thermal camera function as a
+  stand-alone app.
+* [iSoSta](https://github.com/JimKnopfIoT/harbour-isosta) — monitor and settings for the JBC DME-2A on
+  Sailfish OS; on the PC: [jbc-dme-monitor](https://github.com/JimKnopfIoT/jbc-dme-monitor).
+
 ## Credits
 
 * **harbour-advanced-camera** by Adam Pigg and contributors — the camera app this
